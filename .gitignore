@@ -1,0 +1,3 @@
+# Local machine config — proxy host, ports, internal domains, etc.
+# May contain internal hostnames. Copy .env.example to start.
+.env
