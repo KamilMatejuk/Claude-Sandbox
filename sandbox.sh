@@ -131,9 +131,14 @@ add_ro_mount() {  # $1 = host path, $2 = container path
     _echo "[sandbox] ro mount   : $1"
   fi
 }
-# Memory (per-project dir + MEMORY.md) — NOT the sibling *.jsonl transcripts.
-add_ro_mount "${HOST_PROJECT_DIR}/memory"     "${CTR_PROJECT_DIR}/memory"
-add_ro_mount "${HOST_PROJECT_DIR}/MEMORY.md"  "${CTR_PROJECT_DIR}/MEMORY.md"
+# Per-project dir, read-WRITE: transcripts (*.jsonl), memory/, MEMORY.md. This
+# shares history with the host, so `claude --resume` inside the sandbox lists
+# sessions started with the host `claude`, and sandbox sessions persist back to
+# the host. WARNING: the sandboxed Claude can now write/delete your real
+# transcripts and memory. Created on the host first so the bind target exists.
+[ -d "$HOST_PROJECT_DIR" ] || mkdir -p "$HOST_PROJECT_DIR"
+CLAUDE_MOUNTS+=( -v "$HOST_PROJECT_DIR:$CTR_PROJECT_DIR" )
+_echo "[sandbox] rw mount   : $HOST_PROJECT_DIR"
 # Skills, global instructions, global settings.
 add_ro_mount "${HOST_CLAUDE_DIR}/skills"        "${CTR_CLAUDE_DIR}/skills"
 add_ro_mount "${HOST_CLAUDE_DIR}/CLAUDE.md"     "${CTR_CLAUDE_DIR}/CLAUDE.md"

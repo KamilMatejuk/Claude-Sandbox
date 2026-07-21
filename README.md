@@ -9,10 +9,14 @@ An isolated Docker sandbox for running Claude Code with `--dangerously-skip-perm
 - **Filesystem**: Claude only sees the one repo folder you mount (at its real
   host path, so per-project memory keys match). No other host folder is visible
   — not your home dir, not `~/.ssh`, nothing else.
-- **Memory & config**: your per-project memory (`memory/` + `MEMORY.md`),
-  `skills/`, global `CLAUDE.md` and `settings.json` are mounted **read-only**
-  from `~/.claude`, so the sandbox can recall/use them but cannot modify them.
-  Your cross-session `*.jsonl` transcripts are **not** exposed.
+- **Memory & config**: `skills/`, global `CLAUDE.md` and `settings.json` are
+  mounted **read-only** from `~/.claude`, so the sandbox can recall/use them but
+  cannot modify them. The per-project dir (`memory/`, `MEMORY.md`, and the
+  cross-session `*.jsonl` transcripts) is mounted **read-write**, so the sandbox
+  shares history with the host — `claude --resume` inside the sandbox lists
+  sessions you started with the host `claude`, and sandbox sessions persist back.
+  ⚠️ Read-write means the sandboxed Claude can modify/delete your real
+  transcripts and memory — see the caveat under Notes.
 - **Git**: `~/.gitconfig` and `~/.ssh` are mounted **read-only** so commits
   carry your identity and `git push` over SSH works (through the corporate
   proxy defined in `~/.ssh/config`). ⚠️ This means your real SSH private key is
@@ -62,7 +66,7 @@ sandbox-claude --shell ../test
 
 | File | Runs where | What it does |
 |------|-----------|--------------|
-| `sandbox.sh` | host | The launcher you invoke. Parses args (`[--shell] [folder]`), resolves the folder to map (defaults to the current dir), rebuilds the image, assembles the read-only `~/.claude` / git / ssh mounts, and `docker run`s the container. Also always allowlists the git-over-ssh hosts. |
+| `sandbox.sh` | host | The launcher you invoke. Parses args (`[--shell] [folder]`), resolves the folder to map (defaults to the current dir), rebuilds the image, assembles the `~/.claude` / git / ssh mounts (the per-project dir read-write, the rest read-only), and `docker run`s the container. Also always allowlists the git-over-ssh hosts. |
 | `Dockerfile` | build | Defines the image: Node 20 base + `git`, `openssh-client`, `netcat-openbsd`, firewall tooling (`iptables`, `ipset`, `dnsutils`), `gosu`, and the Claude Code CLI. Copies in the two runtime scripts and sets the entrypoint. No `USER` line — the entrypoint starts as root and drops privileges itself. |
 | `entrypoint.sh` | container (root → node) | The container's entrypoint. Runs the firewall, remaps the `node` user to your host UID/GID (so files you edit stay owned by you), prints status, then drops root via `gosu` and execs the requested command (`claude …` or `bash`). |
 | `init-firewall.sh` | container (root) | The egress firewall. Flushes rules, allows loopback + DNS + established traffic, resolves the allowlisted domains (`ALLOWED_DOMAINS`, which `sandbox.sh` has already populated with the auth endpoint + git + pypi) to IPs, permits outbound TCP to only those IPs on the allowed ports, then sets the default policy to DROP. |
@@ -84,11 +88,14 @@ sandbox-claude --shell ../test
 - Claude's login/config persists in the `claude-sandbox-config` Docker volume,
   so you don't re-auth every run. Remove it with
   `docker volume rm claude-sandbox-config`.
-- **Memory is read-only**: the sandbox can *recall* memories but cannot *save*
-  new ones back to the host (by design — a `--dangerously-skip-permissions`
-  Claude shouldn't rewrite your real memory). New memories it writes land in the
-  container's own config volume and vanish on exit. Flip the `:ro` mounts to
-  `:rw` in `sandbox.sh` if you want writes to persist.
+- **History & memory are shared read-write**: the per-project dir
+  (`~/.claude/projects/<key>/`) is bind-mounted read-write, so the sandbox reads
+  *and* writes your real transcripts and memory. This is what makes
+  `claude --resume` inside the sandbox see host sessions, and sandbox sessions
+  show up in the host `claude`. The tradeoff: a `--dangerously-skip-permissions`
+  Claude can rewrite or delete your real memory and transcripts. If you'd rather
+  keep them isolated, change the per-project `-v` bind in `sandbox.sh` back to
+  read-only (`:ro`) — but then resume and memory writes won't cross the boundary.
 - To run with the firewall OFF (open network) for debugging, pass
   `-e SANDBOX_FIREWALL=0` — but then you've lost the network isolation.
 - **SSH key exposure**: `~/.ssh` is mounted read-only so `git push` works, which
