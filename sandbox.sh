@@ -111,7 +111,7 @@ fi
 #   GIT_SSH_DOMAINS="proxy.example.com ssh.github.com github.com" sandbox-claude
 GIT_SSH_DOMAINS="${GIT_SSH_DOMAINS:-ssh.github.com github.com}"
 # Always-on package registries (pip needs both the index and the file CDN).
-DEFAULT_DOMAINS="pypi.org files.pythonhosted.org"
+DEFAULT_DOMAINS="pypi.org files.pythonhosted.org raw.githubusercontent.com"
 ALLOWED_DOMAINS="${AUTH_DOMAINS} ${GIT_SSH_DOMAINS} ${DEFAULT_DOMAINS} ${ALLOWED_DOMAINS:-}"
 
 # --- Project memory key: same sanitization Claude Code uses (non-alnum -> '-') ---
