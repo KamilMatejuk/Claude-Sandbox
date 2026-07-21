@@ -36,7 +36,7 @@ fi
 # Host Claude config to expose (read-only) into the sandbox.
 HOST_CLAUDE_DIR="${HOME}/.claude"
 # Config dir inside the container (matches CLAUDE_CONFIG_DIR in the Dockerfile).
-CTR_CLAUDE_DIR="/home/node/.claude"
+CTR_CLAUDE_DIR="/home/user/.claude"
 
 # --- Args ---
 # --shell (anywhere) -> run bash instead of claude. A single positional arg is
@@ -144,11 +144,11 @@ add_ro_mount "${HOST_CLAUDE_DIR}/skills"        "${CTR_CLAUDE_DIR}/skills"
 add_ro_mount "${HOST_CLAUDE_DIR}/CLAUDE.md"     "${CTR_CLAUDE_DIR}/CLAUDE.md"
 add_ro_mount "${HOST_CLAUDE_DIR}/settings.json" "${CTR_CLAUDE_DIR}/settings.json"
 # Git identity (so commits carry your name/email). Read-only.
-add_ro_mount "${HOME}/.gitconfig"               "/home/node/.gitconfig"
+add_ro_mount "${HOME}/.gitconfig"               "/home/user/.gitconfig"
 # SSH: mount the whole ~/.ssh read-only so push-over-ssh works (private key,
 # config with the corporate ProxyCommand, and known_hosts all come along).
 # WARNING: this exposes your real private key to the sandboxed Claude.
-add_ro_mount "${HOME}/.ssh"                     "/home/node/.ssh"
+add_ro_mount "${HOME}/.ssh"                     "/home/user/.ssh"
 
 _echo "[sandbox] folder       : $REPO_PATH  (mounted at same path)"
 _echo "[sandbox] project key  : $PROJECT_KEY"
