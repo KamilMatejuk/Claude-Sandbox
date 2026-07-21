@@ -40,7 +40,7 @@ chown -R "$HOST_UID:$HOST_GID" /home/node/.claude 2>/dev/null || true
 
 _echo "[entrypoint] workspace: $(pwd)"
 _echo "[entrypoint] user     : node ($HOST_UID:$HOST_GID)"
-_echo "[entrypoint] ready. Launch Claude with:  claude --dangerously-skip-permissions"
+_echo "[entrypoint] launch claude..."
 echo
 
 # Drop root and run as the sandbox user. gosu dropping privileges does not
