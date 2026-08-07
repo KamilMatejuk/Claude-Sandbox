@@ -111,8 +111,16 @@ fi
 #   GIT_SSH_DOMAINS="proxy.example.com ssh.github.com github.com" sandbox-claude
 GIT_SSH_DOMAINS="${GIT_SSH_DOMAINS:-ssh.github.com github.com}"
 # Always-on package registries (pip needs both the index and the file CDN).
-DEFAULT_DOMAINS="pypi.org files.pythonhosted.org raw.githubusercontent.com"
+DEFAULT_DOMAINS="pypi.org files.pythonhosted.org raw.githubusercontent.com api.anthropic.com"
 ALLOWED_DOMAINS="${AUTH_DOMAINS} ${GIT_SSH_DOMAINS} ${DEFAULT_DOMAINS} ${ALLOWED_DOMAINS:-}"
+
+# --- Collect all CLAUDE_CODE_* environment variables ---
+CLAUDE_CODE_ENV=()
+while IFS='=' read -r name value; do
+  if [[ "$name" == CLAUDE_CODE_* ]]; then
+    CLAUDE_CODE_ENV+=( -e "$name" )
+  fi
+done < <(env)
 
 # --- Project memory key: same sanitization Claude Code uses (non-alnum -> '-') ---
 PROJECT_KEY="$(printf '%s' "$REPO_PATH" | sed 's/[^a-zA-Z0-9]/-/g')"
@@ -168,9 +176,11 @@ exec docker run --rm -it \
   -e TERM="${TERM:-xterm-256color}" \
   -e COLORTERM="${COLORTERM:-truecolor}" \
   "${AUTH_ENV[@]}" \
+  "${CLAUDE_CODE_ENV[@]}" \
   -e ANTHROPIC_MODEL="$ANTHROPIC_MODEL" \
   -e ALLOWED_DOMAINS="${ALLOWED_DOMAINS:-}" \
   -e ALLOWED_PORTS="${ALLOWED_PORTS:-}" \
+  -e NODE_TLS_REJECT_UNAUTHORIZED="${NODE_TLS_REJECT_UNAUTHORIZED:-1}" \
   -e HOST_UID="$(id -u)" \
   -e HOST_GID="$(id -g)" \
   -v "$REPO_PATH:$REPO_PATH" \
