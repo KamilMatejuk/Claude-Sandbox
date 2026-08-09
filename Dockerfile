@@ -8,6 +8,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       gnupg \
       iptables \
       ipset \
+      dnsmasq-base \
       dnsutils \
       iproute2 \
       jq \
