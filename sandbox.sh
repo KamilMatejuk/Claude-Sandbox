@@ -131,12 +131,18 @@ CTR_PROJECT_DIR="${CTR_CLAUDE_DIR}/projects/${PROJECT_KEY}"
 _echo "[sandbox] building image $IMAGE ..."
 docker build -t "$IMAGE" "$SCRIPT_DIR"
 
-# --- Assemble read-only ~/.claude mounts (only what exists) ---
+# --- Assemble ~/.claude mounts (only what exists) ---
 CLAUDE_MOUNTS=()
 add_ro_mount() {  # $1 = host path, $2 = container path
   if [ -e "$1" ]; then
     CLAUDE_MOUNTS+=( -v "$1:$2:ro" )
     _echo "[sandbox] ro mount   : $1"
+  fi
+}
+add_rw_mount() {  # $1 = host path, $2 = container path
+  if [ -e "$1" ]; then
+    CLAUDE_MOUNTS+=( -v "$1:$2" )
+    _echo "[sandbox] rw mount   : $1"
   fi
 }
 # Per-project dir, read-WRITE: transcripts (*.jsonl), memory/, MEMORY.md. This
@@ -147,10 +153,13 @@ add_ro_mount() {  # $1 = host path, $2 = container path
 [ -d "$HOST_PROJECT_DIR" ] || mkdir -p "$HOST_PROJECT_DIR"
 CLAUDE_MOUNTS+=( -v "$HOST_PROJECT_DIR:$CTR_PROJECT_DIR" )
 _echo "[sandbox] rw mount   : $HOST_PROJECT_DIR"
-# Skills, global instructions, global settings.
-add_ro_mount "${HOST_CLAUDE_DIR}/skills"        "${CTR_CLAUDE_DIR}/skills"
-add_ro_mount "${HOST_CLAUDE_DIR}/CLAUDE.md"     "${CTR_CLAUDE_DIR}/CLAUDE.md"
-add_ro_mount "${HOST_CLAUDE_DIR}/settings.json" "${CTR_CLAUDE_DIR}/settings.json"
+# Skills, global instructions, global settings. Read-WRITE, so the sandboxed
+# Claude can edit skills/settings and add global instructions. WARNING: those
+# edits land on the real host files, and settings.json/CLAUDE.md steer every
+# later Claude run (sandboxed or not).
+add_rw_mount "${HOST_CLAUDE_DIR}/skills"        "${CTR_CLAUDE_DIR}/skills"
+add_rw_mount "${HOST_CLAUDE_DIR}/CLAUDE.md"     "${CTR_CLAUDE_DIR}/CLAUDE.md"
+add_rw_mount "${HOST_CLAUDE_DIR}/settings.json" "${CTR_CLAUDE_DIR}/settings.json"
 # Git identity (so commits carry your name/email). Read-only.
 add_ro_mount "${HOME}/.gitconfig"               "/home/user/.gitconfig"
 # SSH: mount the whole ~/.ssh read-only so push-over-ssh works (private key,
