@@ -23,6 +23,11 @@ An isolated Docker sandbox for running Claude Code with `--dangerously-skip-perm
   carry your identity and `git push` over SSH works (through the corporate
   proxy defined in `~/.ssh/config`). ⚠️ This means your real SSH private key is
   readable by the sandboxed Claude — see the caveat under Notes.
+- **GitHub CLI**: `gh` is in the image. Auth comes from `GH_TOKEN` /
+  `GITHUB_TOKEN` if set, else a host `gh auth login` (`~/.config/gh`, mounted
+  read-only), else the `claude-sandbox-gh` volume so a `gh auth login` run
+  inside the sandbox persists. `api.github.com` and the GitHub object/upload
+  hosts are allowlisted by default.
 - **Network**: default-deny egress. Only your auth endpoint (Bedrock /
   api.anthropic.com / custom base URL) and any domains you explicitly allow can
   be reached.
@@ -69,7 +74,7 @@ sandbox-claude --shell ../test
 | File | Runs where | What it does |
 |------|-----------|--------------|
 | `sandbox.sh` | host | The launcher you invoke. Parses args (`[--shell] [folder]`), resolves the folder to map (defaults to the current dir), rebuilds the image, assembles the `~/.claude` / git / ssh mounts (per-project dir, `skills/`, `CLAUDE.md` and `settings.json` read-write; git/ssh identity read-only), and `docker run`s the container. Also always allowlists the git-over-ssh hosts. |
-| `Dockerfile` | build | Defines the image: Node 20 base + `git`, `openssh-client`, `netcat-openbsd`, firewall tooling (`iptables`, `ipset`, `dnsutils`), `gosu`, and the Claude Code CLI. Copies in the two runtime scripts and sets the entrypoint. No `USER` line — the entrypoint starts as root and drops privileges itself. |
+| `Dockerfile` | build | Defines the image: Node 20 base + `git`, `gh`, `openssh-client`, `netcat-openbsd`, firewall tooling (`iptables`, `ipset`, `dnsutils`), `gosu`, and the Claude Code CLI. Copies in the two runtime scripts and sets the entrypoint. No `USER` line — the entrypoint starts as root and drops privileges itself. |
 | `entrypoint.sh` | container (root → node) | The container's entrypoint. Runs the firewall, remaps the `node` user to your host UID/GID (so files you edit stay owned by you), prints status, then drops root via `gosu` and execs the requested command (`claude …` or `bash`). |
 | `init-firewall.sh` | container (root) | The egress firewall. Flushes rules, allows loopback + DNS + established traffic, resolves the allowlisted domains (`ALLOWED_DOMAINS`, which `sandbox.sh` has already populated with the auth endpoint + git + pypi) to IPs, permits outbound TCP to only those IPs on the allowed ports, then sets the default policy to DROP. |
 | `.env` | host (sourced by `sandbox.sh`) | Local machine config (gitignored) — e.g. corporate proxy host + `ALLOWED_PORTS`. Sourced before defaults; command-line values still win. Copy `.env.example` to start. |
@@ -82,8 +87,16 @@ sandbox-claude --shell ../test
   the host from `ANTHROPIC_BASE_URL`, depending on which auth you set. Add
   whatever else you need via `ALLOWED_DOMAINS`.
 - **PyPI is allowed by default** (`pypi.org` + `files.pythonhosted.org`, both
-  needed for `pip install`), alongside the git-over-ssh hosts. Edit the
-  `DEFAULT_DOMAINS` line in `sandbox.sh` to change this.
+  needed for `pip install`), alongside the git-over-ssh hosts and the hosts `gh`
+  needs (`api.github.com`, `objects.githubusercontent.com`,
+  `uploads.github.com`). Edit the `DEFAULT_DOMAINS` lines in `sandbox.sh` to
+  change this.
+- **`gh` auth**: the simplest setup is a token in `.env`
+  (`export GH_TOKEN=ghp_...`) — it's forwarded into the container and nothing is
+  written to disk. Otherwise a host `~/.config/gh` is mounted read-only (so
+  `gh auth login`/`refresh` *inside* the sandbox will fail — log in on the host
+  instead), and with neither, gh's config lives in the `claude-sandbox-gh`
+  volume; drop it with `docker volume rm claude-sandbox-gh`.
 - The allowlist is resolved to IPs **once at container start**. If a service
   rotates IPs (CDNs), restart the container to re-resolve, or add its stable
   domains.

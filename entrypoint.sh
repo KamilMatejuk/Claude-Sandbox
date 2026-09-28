@@ -32,6 +32,7 @@ if [ "$HOST_UID" != "$CUR_UID" ]; then
 fi
 chown "$HOST_UID:$HOST_GID" /home/user 2>/dev/null || true
 chown -R "$HOST_UID:$HOST_GID" /home/user/.claude 2>/dev/null || true
+chown -R "$HOST_UID:$HOST_GID" /home/user/.config 2>/dev/null || true
 
 _echo "[entrypoint] workspace: $(pwd)"
 _echo "[entrypoint] user     : user ($HOST_UID:$HOST_GID)"

@@ -110,9 +110,35 @@ fi
 # here (or via ALLOWED_DOMAINS / GIT_SSH_DOMAINS), e.g.:
 #   GIT_SSH_DOMAINS="proxy.example.com ssh.github.com github.com" sandbox-claude
 GIT_SSH_DOMAINS="${GIT_SSH_DOMAINS:-ssh.github.com github.com}"
-# Always-on package registries (pip needs both the index and the file CDN).
+# Always-on package registries (pip needs both the index and the file CDN) plus
+# the hosts `gh` talks to: api.github.com (every API call), objects.* (release
+# and blob downloads), uploads.* (`gh release upload`).
 DEFAULT_DOMAINS="pypi.org files.pythonhosted.org raw.githubusercontent.com api.anthropic.com"
+DEFAULT_DOMAINS="$DEFAULT_DOMAINS api.github.com objects.githubusercontent.com uploads.github.com"
 ALLOWED_DOMAINS="${AUTH_DOMAINS} ${GIT_SSH_DOMAINS} ${DEFAULT_DOMAINS} ${ALLOWED_DOMAINS:-}"
+
+# --- GitHub CLI auth ---
+# Two paths, in precedence order:
+#   1. GH_TOKEN / GITHUB_TOKEN in the environment (or .env) — forwarded straight
+#      in. This is the headless-friendly option and leaves no state behind.
+#   2. A host `gh auth login` (~/.config/gh) — bind-mounted read-only.
+# If neither exists, a named volume holds the container's own gh config so a
+# `gh auth login` run *inside* the sandbox survives across runs.
+GH_ENV=()
+GH_MOUNT=()
+HOST_GH_DIR="${HOME}/.config/gh"
+CTR_GH_DIR="/home/user/.config/gh"
+if [ -n "${GH_TOKEN:-}" ] || [ -n "${GITHUB_TOKEN:-}" ]; then
+  [ -n "${GH_TOKEN:-}" ]     && GH_ENV+=( -e GH_TOKEN )
+  [ -n "${GITHUB_TOKEN:-}" ] && GH_ENV+=( -e GITHUB_TOKEN )
+  _echo "[sandbox] gh auth      : token from environment"
+elif [ -d "$HOST_GH_DIR" ]; then
+  GH_MOUNT+=( -v "$HOST_GH_DIR:$CTR_GH_DIR:ro" )
+  _echo "[sandbox] gh auth      : host $HOST_GH_DIR (read-only)"
+else
+  GH_MOUNT+=( -v claude-sandbox-gh:"$CTR_GH_DIR" )
+  _echo "[sandbox] gh auth      : none — run 'gh auth login' in the sandbox (persisted in volume claude-sandbox-gh)"
+fi
 
 # --- Collect all CLAUDE_CODE_* environment variables ---
 CLAUDE_CODE_ENV=()
@@ -185,6 +211,7 @@ exec docker run --rm -it \
   -e TERM="${TERM:-xterm-256color}" \
   -e COLORTERM="${COLORTERM:-truecolor}" \
   "${AUTH_ENV[@]}" \
+  "${GH_ENV[@]}" \
   "${CLAUDE_CODE_ENV[@]}" \
   -e ANTHROPIC_MODEL="$ANTHROPIC_MODEL" \
   -e ALLOWED_DOMAINS="${ALLOWED_DOMAINS:-}" \
@@ -195,5 +222,6 @@ exec docker run --rm -it \
   -v "$REPO_PATH:$REPO_PATH" \
   -v claude-sandbox-config:"$CTR_CLAUDE_DIR" \
   "${CLAUDE_MOUNTS[@]}" \
+  "${GH_MOUNT[@]}" \
   -w "$REPO_PATH" \
   "$IMAGE" "$@"
